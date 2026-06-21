@@ -159,9 +159,8 @@ export default function SuperstrikeSettings({
           <label>
             Mode
             <select value={onboardMode} onChange={(event) => setOnboardMode(event.target.value as OnboardMode)}>
-              <option value="host">Host</option>
-              <option value="onboard">Onboard</option>
-              <option value="no-change">No change</option>
+              <option value="host">Host / disabled</option>
+              <option value="onboard">Onboard profile</option>
             </select>
           </label>
           <button type="button" onClick={() => onWriteOnboardMode(onboardMode)} disabled={busy || !snapshot?.onboardMode}>

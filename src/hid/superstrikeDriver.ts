@@ -164,6 +164,7 @@ export class SuperstrikeDriver {
     const feature = await this.requireFeature('EXTENDED_ADJUSTABLE_DPI');
     const deviceIndex = await this.resolveDeviceIndex();
 
+    await this.disableOnboardProfilesIfSupported(deviceIndex);
     await this.transport.request({
       reportId: HIDPP_LONG_REPORT_ID,
       deviceIndex,
@@ -237,6 +238,22 @@ export class SuperstrikeDriver {
     }
 
     return feature;
+  }
+
+  private async disableOnboardProfilesIfSupported(deviceIndex: number): Promise<void> {
+    const features = await this.readFeatureSupport();
+    const feature = features.ONBOARD_PROFILES;
+    if (!feature?.supported) {
+      return;
+    }
+
+    await this.transport.request({
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
+      featureIndex: feature.index,
+      functionId: FN_SET,
+      params: encodeOnboardMode('host'),
+    });
   }
 
   private async readSuperstrikeSettingsIfSupported(features: FeatureSupportMap): Promise<SuperstrikeSettings | undefined> {

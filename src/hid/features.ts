@@ -33,7 +33,7 @@ export interface ExtendedDpiSettings {
 }
 
 export type ExtendedReportRate = '8ms' | '4ms' | '2ms' | '1ms' | '500us' | '250us' | '125us';
-export type OnboardMode = 'no-change' | 'onboard' | 'host';
+export type OnboardMode = 'onboard' | 'host';
 
 export interface DecodedSuperstrikeRead {
   button: SuperstrikeButton;
@@ -77,13 +77,12 @@ const EXTENDED_REPORT_RATE_BY_VALUE = Object.fromEntries(
 ) as Record<number, ExtendedReportRate>;
 
 const ONBOARD_MODE_VALUE: Record<OnboardMode, number> = {
-  'no-change': 0x00,
   onboard: 0x01,
   host: 0x02,
 };
 
 const ONBOARD_MODE_BY_VALUE: Record<number, OnboardMode> = {
-  0x00: 'no-change',
+  0x00: 'host',
   0x01: 'onboard',
   0x02: 'host',
 };

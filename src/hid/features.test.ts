@@ -61,6 +61,7 @@ describe('feature codecs', () => {
   it('encodes and decodes onboard mode', () => {
     expect(encodeOnboardMode('onboard')).toEqual([0x01]);
     expect(encodeOnboardMode('host')).toEqual([0x02]);
+    expect(decodeOnboardMode(new Uint8Array([0x00]))).toBe('host');
     expect(decodeOnboardMode(new Uint8Array([0x02]))).toBe('host');
   });
 });
