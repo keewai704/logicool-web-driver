@@ -141,7 +141,69 @@ describe('SuperstrikeDriver', () => {
     expect(transport.requests).toContainEqual(expect.objectContaining({ featureIndex: 0x0d, functionId: 0x28 }));
   });
 
-  it('writes extended DPI as one combined payload and report rate through their setting write functions', async () => {
+  it('writes extended DPI and report rate into the active onboard profile sector when available', async () => {
+    const profileSector = new Uint8Array(32).fill(0xff);
+    profileSector[0] = 5;
+    profileSector[1] = 3;
+    profileSector[2] = 0;
+    for (let index = 0; index < 5; index += 1) {
+      profileSector[3 + index * 2] = 0x20;
+      profileSector[4 + index * 2] = 0x03;
+    }
+
+    const transport = new StubTransport((request) => {
+      const featureId = (request.params?.[0] ?? 0) << 8 | (request.params?.[1] ?? 0);
+      if (featureId === FEATURE_IDS.FEATURE_SET) {
+        return responseFor(request, [0x01, 0x00, 0x02]);
+      }
+      if (featureId === FEATURE_IDS.EXTENDED_ADJUSTABLE_DPI) {
+        return responseFor(request, [0x09, 0x00, 0x01]);
+      }
+      if (featureId === FEATURE_IDS.EXTENDED_ADJUSTABLE_REPORT_RATE) {
+        return responseFor(request, [0x0d, 0x00, 0x01]);
+      }
+      if (featureId === FEATURE_IDS.ONBOARD_PROFILES) {
+        return responseFor(request, [0x0f, 0x00, 0x01]);
+      }
+      if (request.featureIndex === 0x0f && request.functionId === 0x08) {
+        return responseFor(request, [0x01, 0x08, 0x01, 0x01, 0x01, 0x05, 0x10, 0x00, 0x20, 0x0a]);
+      }
+      if (request.featureIndex === 0x0f && request.functionId === 0x48) {
+        return responseFor(request, [0x00, 0x01]);
+      }
+      if (request.featureIndex === 0x0f && request.functionId === 0x58) {
+        const sector = (request.params?.[0] ?? 0) << 8 | (request.params?.[1] ?? 0);
+        const offset = (request.params?.[2] ?? 0) << 8 | (request.params?.[3] ?? 0);
+        if (sector === 0x0000) {
+          return responseFor(request, [0x00, 0x01, 0x01, 0xff, 0xff, 0xff, 0x00, 0x00]);
+        }
+        return responseFor(request, Array.from(profileSector.slice(offset, offset + 16)));
+      }
+      return responseFor(request, request.params ?? []);
+    });
+    const driver = new SuperstrikeDriver(transport, {
+      productName: 'Fake PRO X2 SUPERSTRIKE',
+      vendorId: 0x046d,
+      productId: 0x40bd,
+    });
+
+    await driver.writeExtendedDpi({ x: 1600, y: 1600, lod: 'HIGH' });
+    await driver.writeExtendedReportRate('1ms');
+
+    const dpiWrites = transport.requests.filter((request) => request.featureIndex === 0x09);
+    expect(dpiWrites).toEqual([]);
+    const onboardWrites = transport.requests.filter((request) => request.featureIndex === 0x0f);
+    expect(onboardWrites).toContainEqual(
+      expect.objectContaining({ functionId: 0x68, params: [0x00, 0x01, 0x00, 0x00, 0x00, 0x20] }),
+    );
+    expect(onboardWrites).toContainEqual(expect.objectContaining({ functionId: 0x78 }));
+    expect(onboardWrites).toContainEqual(expect.objectContaining({ reportId: 0x10, functionId: 0x88 }));
+    expect(onboardWrites).toContainEqual(expect.objectContaining({ reportId: 0x10, functionId: 0x18, params: [0x01] }));
+    expect(onboardWrites).toContainEqual(expect.objectContaining({ reportId: 0x10, functionId: 0x38, params: [0x00, 0x01] }));
+    expect(transport.requests).not.toContainEqual(expect.objectContaining({ featureIndex: 0x0d, functionId: 0x38 }));
+  });
+
+  it('rejects onboard DPI and report rate values that cannot be represented by the active profile sector', async () => {
     const transport = new StubTransport((request) => {
       const featureId = (request.params?.[0] ?? 0) << 8 | (request.params?.[1] ?? 0);
       if (featureId === FEATURE_IDS.FEATURE_SET) {
@@ -164,18 +226,7 @@ describe('SuperstrikeDriver', () => {
       productId: 0x40bd,
     });
 
-    await driver.writeExtendedDpi({ x: 800, y: 1600, lod: 'HIGH' });
-    await driver.writeExtendedReportRate('125us');
-
-    const dpiWrites = transport.requests.filter((request) => request.featureIndex === 0x09);
-    expect(dpiWrites).toEqual([
-      expect.objectContaining({ functionId: 0x68, params: [0x00, 0x03, 0x20, 0x06, 0x40, 0x02] }),
-    ]);
-    const onboardWrites = transport.requests.filter((request) => request.featureIndex === 0x0f);
-    expect(onboardWrites.at(0)).toEqual(expect.objectContaining({ functionId: 0x18, params: [0x02] }));
-    expect(transport.requests.indexOf(onboardWrites[0])).toBeLessThan(transport.requests.indexOf(dpiWrites[0]));
-    expect(transport.requests).toContainEqual(
-      expect.objectContaining({ featureIndex: 0x0d, functionId: 0x38, params: [0x06] }),
-    );
+    await expect(driver.writeExtendedDpi({ x: 800, y: 1600, lod: 'HIGH' })).rejects.toThrow(/same X and Y/);
+    await expect(driver.writeExtendedReportRate('125us')).rejects.toThrow(/cannot persist/);
   });
 });

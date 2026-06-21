@@ -50,11 +50,13 @@ export default function App() {
         vendorId: hidDevice.vendorId,
         productId: hidDevice.productId,
       };
-      setDriver(new SuperstrikeDriver(transport, info));
+      const nextDriver = new SuperstrikeDriver(transport, info);
+      const nextSnapshot = await nextDriver.readSnapshot();
+      setDriver(nextDriver);
       setDevice(info);
-      setLogs([]);
-      setSnapshot(null);
-    }, 'Device connected. Read the current settings before writing.');
+      setSnapshot(nextSnapshot);
+      setLogs(nextSnapshot.logs);
+    }, 'Device connected and snapshot read.');
   }
 
   async function handleReadSnapshot(): Promise<void> {

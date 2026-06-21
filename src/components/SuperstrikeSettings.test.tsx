@@ -97,7 +97,7 @@ describe('SuperstrikeSettings', () => {
     await user.click(screen.getByRole('button', { name: /write dpi/i }));
     await user.click(screen.getByRole('button', { name: /write tuning/i }));
 
-    expect(onWriteDpi).toHaveBeenCalledWith({ x: 800, y: 1600, lod: 'HIGH' });
+    expect(onWriteDpi).toHaveBeenCalledWith({ x: 800, y: 800, lod: 'HIGH' });
     expect(onWriteSuperstrike).toHaveBeenCalledWith({
       left: { actuation: 5, rapidTrigger: 3, haptics: 4 },
       right: { actuation: 6, rapidTrigger: 2, haptics: 5 },

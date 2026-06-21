@@ -61,6 +61,7 @@ export default function SuperstrikeSettings({
   const hasSnapshot = Boolean(snapshot);
   const canWriteTuning = hasSnapshot && Boolean(snapshot?.superstrike) && validation.ok && !busy;
   const canWriteDpi = hasSnapshot && Boolean(snapshot?.dpi) && dpiValidation.ok && !busy;
+  const setLinkedDpi = (value: number) => setDpi({ ...dpi, x: value, y: value });
 
   return (
     <section className="panel" aria-labelledby="settings-heading">
@@ -108,7 +109,7 @@ export default function SuperstrikeSettings({
             min={NUMERIC_RANGES.dpi.min}
             step={NUMERIC_RANGES.dpi.step}
             value={dpi.x}
-            onChange={(x) => setDpi({ ...dpi, x })}
+            onChange={setLinkedDpi}
           />
           <SliderNumberField
             label="DPI Y"
@@ -116,7 +117,7 @@ export default function SuperstrikeSettings({
             min={NUMERIC_RANGES.dpi.min}
             step={NUMERIC_RANGES.dpi.step}
             value={dpi.y}
-            onChange={(y) => setDpi({ ...dpi, y })}
+            onChange={setLinkedDpi}
           />
           <label>
             LOD
