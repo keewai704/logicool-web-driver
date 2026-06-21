@@ -9,13 +9,44 @@ async function flushTransportStart(): Promise<void> {
 }
 
 describe('requestLogitechDevice', () => {
-  it('requests devices filtered to Logitech VID', async () => {
+  it('requests Logitech HID++ vendor collections', async () => {
     const device = new FakeHidDevice();
     const hid = new FakeHid([device]);
 
     await expect(requestLogitechDevice(hid)).resolves.toBe(device);
 
-    expect(hid.requestOptions).toEqual({ filters: [{ vendorId: 0x046d }] });
+    expect(hid.requestOptions).toEqual({
+      filters: [
+        { vendorId: 0x046d, usagePage: 0xff00, usage: 0x01 },
+        { vendorId: 0x046d, usagePage: 0xff00, usage: 0x02 },
+      ],
+    });
+  });
+
+  it('selects the HID++ report device when Chromium returns multiple Logitech interfaces', async () => {
+    const keyboardDevice = new FakeHidDevice({
+      collections: [
+        {
+          usagePage: 0x01,
+          usage: 0x06,
+          inputReports: [],
+          outputReports: [],
+          featureReports: [],
+        },
+      ],
+    });
+    const hidppDevice = new FakeHidDevice();
+    const hid = new FakeHid([keyboardDevice, hidppDevice]);
+
+    await expect(requestLogitechDevice(hid)).resolves.toBe(hidppDevice);
+  });
+
+  it('prefers the paired Superstrike HID++ device over the USB receiver transport', async () => {
+    const receiverTransport = new FakeHidDevice({ productId: 0xc54d, productName: 'USB Receiver' });
+    const superstrikeDevice = new FakeHidDevice({ productId: 0x40bd, productName: 'USB Receiver' });
+    const hid = new FakeHid([receiverTransport, superstrikeDevice]);
+
+    await expect(requestLogitechDevice(hid)).resolves.toBe(superstrikeDevice);
   });
 });
 
@@ -87,6 +118,26 @@ describe('WebHidTransport', () => {
     await flushTransportStart();
 
     await vi.advanceTimersByTimeAsync(51);
+
+    await assertion;
+  });
+
+  it('rejects matching HID++ error reports immediately', async () => {
+    vi.useFakeTimers();
+    const device = new FakeHidDevice();
+    const transport = new WebHidTransport(device, { timeoutMs: 1000 });
+
+    const pending = transport.request({
+      reportId: 0x11,
+      deviceIndex: 0x01,
+      featureIndex: 0x0c,
+      functionId: 0x10,
+      params: [0x00, 0x03, 0x04, 0x08],
+    });
+    const assertion = expect(pending).rejects.toThrow(/HID\+\+ error 0x02/i);
+    await flushTransportStart();
+
+    device.emitInputReport(0x11, [0x01, 0xff, 0x0c, 0x10, 0x02]);
 
     await assertion;
   });

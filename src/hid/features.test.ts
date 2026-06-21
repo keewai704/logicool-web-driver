@@ -22,14 +22,18 @@ describe('feature codecs', () => {
   });
 
   it('encodes Superstrike tuning writes by button and setting', () => {
-    expect(encodeSuperstrikeWrite('left', 'actuation', 7)).toEqual([0x00, 0x00, 0x07]);
-    expect(encodeSuperstrikeWrite('right', 'haptics', 0)).toEqual([0x01, 0x02, 0x00]);
+    expect(encodeSuperstrikeWrite('left', { actuation: 7, rapidTrigger: 3, haptics: 4 }, 0x09)).toEqual([
+      0x00, 0x1c, 0x0d, 0x10,
+    ]);
+    expect(encodeSuperstrikeWrite('right', { actuation: 5, rapidTrigger: 2, haptics: 0 }, 0x08)).toEqual([
+      0x01, 0x14, 0x08, 0x00,
+    ]);
   });
 
   it('decodes Superstrike tuning reads from setting bytes', () => {
-    expect(decodeSuperstrikeRead(new Uint8Array([0x00, 0x05, 0x03, 0x04]))).toEqual({
+    expect(decodeSuperstrikeRead(new Uint8Array([0x00, 0x14, 0x08, 0x10]))).toEqual({
       button: 'left',
-      settings: { actuation: 5, rapidTrigger: 3, haptics: 4 },
+      settings: { actuation: 5, rapidTrigger: 2, haptics: 4 },
     });
   });
 

@@ -2,12 +2,36 @@ import type { HidppReportId } from '../hid/hidpp';
 
 type HidInputReportListener = (event: HIDInputReportEvent) => void;
 
+interface FakeHidDeviceOptions {
+  collections?: HIDCollectionInfo[];
+  productId?: number;
+  productName?: string;
+}
+
 export class FakeHidDevice extends EventTarget implements HIDDevice {
   opened = false;
   readonly vendorId = 0x046d;
-  readonly productId = 0xc54d;
-  readonly productName = 'Fake PRO X2 SUPERSTRIKE';
+  readonly productId: number;
+  readonly productName: string;
+  readonly collections: HIDCollectionInfo[];
   readonly sentReports: Array<{ reportId: number; data: Uint8Array }> = [];
+
+  constructor(options: FakeHidDeviceOptions = {}) {
+    super();
+    this.productId = options.productId ?? 0xc54d;
+    this.productName = options.productName ?? 'Fake PRO X2 SUPERSTRIKE';
+    this.collections =
+      options.collections ??
+      [
+        {
+          usagePage: 0xff00,
+          usage: 0x01,
+          inputReports: [{ reportId: 0x10, items: [] }],
+          outputReports: [{ reportId: 0x10, items: [] }],
+          featureReports: [],
+        },
+      ];
+  }
 
   async open(): Promise<void> {
     this.opened = true;

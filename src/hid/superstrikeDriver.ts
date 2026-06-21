@@ -55,6 +55,12 @@ export interface DeviceSnapshot {
 }
 
 const DEVICE_INDEX = 0xff;
+const WIRELESS_DEVICE_INDEX = 0x01;
+const HIDPP_LONG_REPORT_ID = 0x11;
+const SOFTWARE_ID = 0x08;
+const FN_ROOT_GET_FEATURE = 0x00 | SOFTWARE_ID;
+const FN_GET = 0x20 | SOFTWARE_ID;
+const FN_SET = 0x10 | SOFTWARE_ID;
 const TARGET_FEATURE_IDS = [
   FEATURE_IDS.SUPERSTRIKE_TUNING,
   FEATURE_IDS.EXTENDED_ADJUSTABLE_DPI,
@@ -64,6 +70,7 @@ const TARGET_FEATURE_IDS = [
 
 export class SuperstrikeDriver {
   private features: FeatureSupportMap | null = null;
+  private deviceIndex: number | null = null;
 
   constructor(
     private readonly transport: HidppTransport,
@@ -92,14 +99,15 @@ export class SuperstrikeDriver {
       return this.features;
     }
 
+    const deviceIndex = await this.resolveDeviceIndex();
     const features: FeatureSupportMap = {};
 
     for (const featureId of TARGET_FEATURE_IDS) {
       const request: HidppFeatureRequest = {
-        reportId: 0x10,
-        deviceIndex: DEVICE_INDEX,
+        reportId: HIDPP_LONG_REPORT_ID,
+        deviceIndex,
         featureIndex: 0x00,
-        functionId: 0x00,
+        functionId: FN_ROOT_GET_FEATURE,
         params: [(featureId >> 8) & 0xff, featureId & 0xff],
       };
       const response = await this.transport.request(request);
@@ -127,61 +135,92 @@ export class SuperstrikeDriver {
     }
 
     const feature = await this.requireFeature('SUPERSTRIKE_TUNING');
-    const writes: Array<['left' | 'right', 'actuation' | 'rapidTrigger' | 'haptics', number]> = [
-      ['left', 'actuation', settings.left.actuation],
-      ['left', 'rapidTrigger', settings.left.rapidTrigger],
-      ['left', 'haptics', settings.left.haptics],
-      ['right', 'actuation', settings.right.actuation],
-      ['right', 'rapidTrigger', settings.right.rapidTrigger],
-      ['right', 'haptics', settings.right.haptics],
-    ];
+    const deviceIndex = await this.resolveDeviceIndex();
 
-    for (const [button, key, value] of writes) {
-      await this.transport.request({
-        reportId: 0x10,
-        deviceIndex: DEVICE_INDEX,
+    for (const button of ['left', 'right'] as const) {
+      const current = await this.transport.request({
+        reportId: HIDPP_LONG_REPORT_ID,
+        deviceIndex,
         featureIndex: feature.index,
-        functionId: 0x20,
-        params: encodeSuperstrikeWrite(button, key, value),
+        functionId: FN_GET,
+        params: encodeSuperstrikeRead(button),
+      });
+
+      await this.transport.request({
+        reportId: HIDPP_LONG_REPORT_ID,
+        deviceIndex,
+        featureIndex: feature.index,
+        functionId: FN_SET,
+        params: encodeSuperstrikeWrite(button, settings[button], current.params[2] ?? 0),
       });
     }
   }
 
   async writeExtendedDpi(settings: ExtendedDpiSettings): Promise<void> {
     const feature = await this.requireFeature('EXTENDED_ADJUSTABLE_DPI');
+    const deviceIndex = await this.resolveDeviceIndex();
     await this.transport.request({
-      reportId: 0x10,
-      deviceIndex: DEVICE_INDEX,
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
       featureIndex: feature.index,
-      functionId: 0x20,
+      functionId: FN_SET,
       params: encodeExtendedDpi(settings),
     });
   }
 
   async writeExtendedReportRate(rate: ExtendedReportRate): Promise<void> {
     const feature = await this.requireFeature('EXTENDED_ADJUSTABLE_REPORT_RATE');
+    const deviceIndex = await this.resolveDeviceIndex();
     await this.transport.request({
-      reportId: 0x10,
-      deviceIndex: DEVICE_INDEX,
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
       featureIndex: feature.index,
-      functionId: 0x20,
+      functionId: FN_SET,
       params: encodeExtendedReportRate(rate),
     });
   }
 
   async writeOnboardMode(mode: OnboardMode): Promise<void> {
     const feature = await this.requireFeature('ONBOARD_PROFILES');
+    const deviceIndex = await this.resolveDeviceIndex();
     await this.transport.request({
-      reportId: 0x10,
-      deviceIndex: DEVICE_INDEX,
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
       featureIndex: feature.index,
-      functionId: 0x10,
+      functionId: FN_SET,
       params: encodeOnboardMode(mode),
     });
   }
 
   async rawRequest(request: HidppFeatureRequest): Promise<HidppResponse> {
     return this.transport.request(request);
+  }
+
+  private async resolveDeviceIndex(): Promise<number> {
+    if (this.deviceIndex !== null) {
+      return this.deviceIndex;
+    }
+
+    const candidateIndexes = [WIRELESS_DEVICE_INDEX, DEVICE_INDEX];
+    let lastError: unknown = null;
+
+    for (const deviceIndex of candidateIndexes) {
+      try {
+        const response = await this.transport.request({
+          reportId: HIDPP_LONG_REPORT_ID,
+          deviceIndex,
+          featureIndex: 0x00,
+          functionId: FN_ROOT_GET_FEATURE,
+          params: [(FEATURE_IDS.FEATURE_SET >> 8) & 0xff, FEATURE_IDS.FEATURE_SET & 0xff],
+        });
+        this.deviceIndex = response.deviceIndex;
+        return this.deviceIndex;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Unable to resolve HID++ device index.');
   }
 
   private async requireFeature(name: string): Promise<FeatureSupport> {
@@ -201,22 +240,21 @@ export class SuperstrikeDriver {
       return undefined;
     }
 
-    const [left, right] = await Promise.all([
-      this.transport.request({
-        reportId: 0x10,
-        deviceIndex: DEVICE_INDEX,
-        featureIndex: feature.index,
-        functionId: 0x10,
-        params: encodeSuperstrikeRead('left'),
-      }),
-      this.transport.request({
-        reportId: 0x10,
-        deviceIndex: DEVICE_INDEX,
-        featureIndex: feature.index,
-        functionId: 0x10,
-        params: encodeSuperstrikeRead('right'),
-      }),
-    ]);
+    const deviceIndex = await this.resolveDeviceIndex();
+    const left = await this.transport.request({
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
+      featureIndex: feature.index,
+      functionId: FN_GET,
+      params: encodeSuperstrikeRead('left'),
+    });
+    const right = await this.transport.request({
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
+      featureIndex: feature.index,
+      functionId: FN_GET,
+      params: encodeSuperstrikeRead('right'),
+    });
 
     const leftDecoded = decodeSuperstrikeRead(left.params);
     const rightDecoded = decodeSuperstrikeRead(right.params);
@@ -233,11 +271,12 @@ export class SuperstrikeDriver {
       return undefined;
     }
 
+    const deviceIndex = await this.resolveDeviceIndex();
     const response = await this.transport.request({
-      reportId: 0x10,
-      deviceIndex: DEVICE_INDEX,
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
       featureIndex: feature.index,
-      functionId: 0x10,
+      functionId: 0x10 | SOFTWARE_ID,
     });
 
     return decodeExtendedDpi(response.params);
@@ -249,11 +288,12 @@ export class SuperstrikeDriver {
       return undefined;
     }
 
+    const deviceIndex = await this.resolveDeviceIndex();
     const response = await this.transport.request({
-      reportId: 0x10,
-      deviceIndex: DEVICE_INDEX,
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
       featureIndex: feature.index,
-      functionId: 0x10,
+      functionId: 0x10 | SOFTWARE_ID,
     });
 
     return decodeExtendedReportRate(response.params);
@@ -265,11 +305,12 @@ export class SuperstrikeDriver {
       return undefined;
     }
 
+    const deviceIndex = await this.resolveDeviceIndex();
     const response = await this.transport.request({
-      reportId: 0x10,
-      deviceIndex: DEVICE_INDEX,
+      reportId: HIDPP_LONG_REPORT_ID,
+      deviceIndex,
       featureIndex: feature.index,
-      functionId: 0x20,
+      functionId: FN_GET,
     });
 
     return decodeOnboardMode(response.params);

@@ -15,7 +15,22 @@ interface HIDInputReportEvent extends Event {
   readonly reportId: number;
 }
 
+interface HIDReportInfo {
+  readonly reportId: number;
+  readonly items: readonly unknown[];
+}
+
+interface HIDCollectionInfo {
+  readonly usagePage: number;
+  readonly usage: number;
+  readonly inputReports: readonly HIDReportInfo[];
+  readonly outputReports: readonly HIDReportInfo[];
+  readonly featureReports: readonly HIDReportInfo[];
+  readonly children?: readonly HIDCollectionInfo[];
+}
+
 interface HIDDevice extends EventTarget {
+  readonly collections: readonly HIDCollectionInfo[];
   readonly opened: boolean;
   readonly productId: number;
   readonly productName: string;

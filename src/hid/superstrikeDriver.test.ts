@@ -28,8 +28,14 @@ describe('SuperstrikeDriver', () => {
   it('reads feature support and marks missing features as unsupported', async () => {
     const transport = new StubTransport((request) => {
       const featureId = (request.params?.[0] ?? 0) << 8 | (request.params?.[1] ?? 0);
+      if (featureId === FEATURE_IDS.FEATURE_SET) {
+        return responseFor(request, [0x01, 0x00, 0x02]);
+      }
       if (featureId === FEATURE_IDS.SUPERSTRIKE_TUNING) {
         return responseFor(request, [0x08, 0x00, 0x01]);
+      }
+      if (request.featureIndex === 0x08 && request.functionId === 0x28) {
+        return responseFor(request, [request.params?.[0] ?? 0, 0x14, 0x08, 0x00]);
       }
       return responseFor(request, [0x00, 0x00, 0x00]);
     });
@@ -45,6 +51,8 @@ describe('SuperstrikeDriver', () => {
     expect(snapshot.features.SUPERSTRIKE_TUNING?.index).toBe(0x08);
     expect(snapshot.unsupportedFeatures).toContain('EXTENDED_ADJUSTABLE_DPI');
     expect(snapshot.device.productName).toBe('Fake PRO X2 SUPERSTRIKE');
+    expect(transport.requests[0]).toMatchObject({ reportId: 0x11, deviceIndex: 0x01 });
+    expect(snapshot.superstrike?.left).toEqual({ actuation: 5, rapidTrigger: 2, haptics: 0 });
   });
 
   it('refuses invalid Superstrike writes before sending HID reports', async () => {
@@ -68,8 +76,14 @@ describe('SuperstrikeDriver', () => {
   it('writes validated Superstrike settings through the feature index', async () => {
     const transport = new StubTransport((request) => {
       const featureId = (request.params?.[0] ?? 0) << 8 | (request.params?.[1] ?? 0);
+      if (featureId === FEATURE_IDS.FEATURE_SET) {
+        return responseFor(request, [0x01, 0x00, 0x02]);
+      }
       if (featureId === FEATURE_IDS.SUPERSTRIKE_TUNING) {
         return responseFor(request, [0x08, 0x00, 0x01]);
+      }
+      if (request.featureIndex === 0x08 && request.functionId === 0x28) {
+        return responseFor(request, [request.params?.[0] ?? 0, 0x14, 0x09, 0x00]);
       }
       return responseFor(request, [0x00, 0x00, 0x00]);
     });
@@ -84,7 +98,10 @@ describe('SuperstrikeDriver', () => {
       right: { actuation: 6, rapidTrigger: 2, haptics: 0 },
     });
 
-    expect(transport.requests.some((request) => request.featureIndex === 0x08 && request.functionId === 0x20)).toBe(true);
-    expect(transport.requests.at(-1)?.params).toEqual([0x01, 0x02, 0x00]);
+    expect(transport.requests.some((request) => request.featureIndex === 0x08 && request.functionId === 0x28)).toBe(true);
+    const writeRequests = transport.requests.filter((request) => request.featureIndex === 0x08 && request.functionId === 0x18);
+    expect(writeRequests).toHaveLength(2);
+    expect(writeRequests.at(0)).toMatchObject({ reportId: 0x11, deviceIndex: 0x01, params: [0x00, 0x14, 0x0d, 0x10] });
+    expect(writeRequests.at(1)).toMatchObject({ reportId: 0x11, deviceIndex: 0x01, params: [0x01, 0x18, 0x09, 0x00] });
   });
 });

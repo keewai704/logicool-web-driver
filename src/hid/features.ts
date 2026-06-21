@@ -12,7 +12,6 @@ export const FEATURE_NAMES_BY_ID = new Map<number, string>(
 );
 
 export type SuperstrikeButton = 'left' | 'right';
-export type SuperstrikeSettingKey = 'actuation' | 'rapidTrigger' | 'haptics';
 
 export interface SuperstrikeButtonSettings {
   actuation: number;
@@ -49,12 +48,6 @@ const BUTTON_INDEX: Record<SuperstrikeButton, number> = {
 const BUTTON_BY_INDEX: Record<number, SuperstrikeButton> = {
   0x00: 'left',
   0x01: 'right',
-};
-
-const SUPERSTRIKE_SETTING_INDEX: Record<SuperstrikeSettingKey, number> = {
-  actuation: 0x00,
-  rapidTrigger: 0x01,
-  haptics: 0x02,
 };
 
 const LOD_VALUE: Record<LodSetting, number> = {
@@ -95,10 +88,15 @@ const ONBOARD_MODE_BY_VALUE: Record<number, OnboardMode> = {
 
 export function encodeSuperstrikeWrite(
   button: SuperstrikeButton,
-  setting: SuperstrikeSettingKey,
-  value: number,
+  settings: SuperstrikeButtonSettings,
+  currentRapidTriggerWireValue: number,
 ): number[] {
-  return [BUTTON_INDEX[button], SUPERSTRIKE_SETTING_INDEX[setting], value & 0xff];
+  return [
+    BUTTON_INDEX[button],
+    settings.actuation << 2,
+    (settings.rapidTrigger << 2) | (currentRapidTriggerWireValue & 0x01),
+    settings.haptics << 2,
+  ];
 }
 
 export function encodeSuperstrikeRead(button: SuperstrikeButton): number[] {
@@ -115,9 +113,9 @@ export function decodeSuperstrikeRead(params: Uint8Array): DecodedSuperstrikeRea
   return {
     button,
     settings: {
-      actuation: params[1],
-      rapidTrigger: params[2],
-      haptics: params[3],
+      actuation: params[1] >> 2,
+      rapidTrigger: params[2] >> 2,
+      haptics: params[3] >> 2,
     },
   };
 }
