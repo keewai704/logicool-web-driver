@@ -59,17 +59,6 @@ export default function App() {
     }, 'Device connected and snapshot read.');
   }
 
-  async function handleReadSnapshot(): Promise<void> {
-    await runOperation(async () => {
-      if (!driver) {
-        throw new Error('Connect a device first.');
-      }
-      const nextSnapshot = await driver.readSnapshot();
-      setSnapshot(nextSnapshot);
-      setLogs(nextSnapshot.logs);
-    }, 'Snapshot read. Export a backup before writing.');
-  }
-
   async function refreshAfterWrite(message: string): Promise<void> {
     if (!driver) {
       throw new Error('Connect a device first.');
@@ -83,7 +72,7 @@ export default function App() {
   async function handleWriteSuperstrike(settings: SuperstrikeSettingsValue): Promise<void> {
     await runOperation(async () => {
       if (!driver || !snapshot) {
-        throw new Error('Read a snapshot before writing.');
+        throw new Error('Connect the device before writing.');
       }
       await driver.writeSuperstrikeSettings(settings);
       await refreshAfterWrite('Superstrike tuning written and snapshot refreshed.');
@@ -93,7 +82,7 @@ export default function App() {
   async function handleWriteDpi(settings: ExtendedDpiSettings): Promise<void> {
     await runOperation(async () => {
       if (!driver || !snapshot) {
-        throw new Error('Read a snapshot before writing.');
+        throw new Error('Connect the device before writing.');
       }
       await driver.writeExtendedDpi(settings);
       await refreshAfterWrite('DPI settings written and snapshot refreshed.');
@@ -103,7 +92,7 @@ export default function App() {
   async function handleWriteReportRate(rate: ExtendedReportRate): Promise<void> {
     await runOperation(async () => {
       if (!driver || !snapshot) {
-        throw new Error('Read a snapshot before writing.');
+        throw new Error('Connect the device before writing.');
       }
       await driver.writeExtendedReportRate(rate);
       await refreshAfterWrite('Report rate written and snapshot refreshed.');
@@ -113,7 +102,7 @@ export default function App() {
   async function handleWriteOnboardMode(mode: OnboardMode): Promise<void> {
     await runOperation(async () => {
       if (!driver || !snapshot) {
-        throw new Error('Read a snapshot before writing.');
+        throw new Error('Connect the device before writing.');
       }
       await driver.writeOnboardMode(mode);
       await refreshAfterWrite('Onboard mode written and snapshot refreshed.');
@@ -152,7 +141,6 @@ export default function App() {
         status={status}
         webHidSupported={webHidSupported}
         onConnect={() => void handleConnect()}
-        onReadSnapshot={() => void handleReadSnapshot()}
       />
 
       {unsupportedFeatures.length > 0 ? (

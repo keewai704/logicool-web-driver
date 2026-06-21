@@ -73,7 +73,7 @@ export default function SuperstrikeSettings({
         <SlidersHorizontal aria-hidden="true" size={22} />
       </div>
 
-      {!hasSnapshot ? <p className="warning">Read the device before writing settings.</p> : null}
+      {!hasSnapshot ? <p className="warning">Connect the device before writing settings.</p> : null}
 
       <div className="settings-grid">
         <fieldset className="fieldset">

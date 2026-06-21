@@ -125,7 +125,7 @@ describe('SuperstrikeSettings', () => {
     expect(screen.getByText('DPI X must be an integer from 100 to 32000 in steps of 50.')).toBeInTheDocument();
   });
 
-  it('requires a read snapshot before writing', () => {
+  it('requires a connection snapshot before writing', () => {
     render(
       <SuperstrikeSettings
         busy={false}
@@ -138,6 +138,6 @@ describe('SuperstrikeSettings', () => {
     );
 
     expect(screen.getByRole('button', { name: /write tuning/i })).toBeDisabled();
-    expect(screen.getByText(/read the device before writing/i)).toBeInTheDocument();
+    expect(screen.getByText(/connect the device before writing/i)).toBeInTheDocument();
   });
 });

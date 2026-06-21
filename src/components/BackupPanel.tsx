@@ -10,7 +10,7 @@ export default function BackupPanel({ snapshot }: BackupPanelProps) {
   return (
     <section className="panel" aria-labelledby="backup-heading">
       <h2 id="backup-heading">Backup</h2>
-      <p className="muted">Export the last read snapshot before writing settings.</p>
+      <p className="muted">Export the current device snapshot before writing settings.</p>
       <button
         type="button"
         disabled={!snapshot}

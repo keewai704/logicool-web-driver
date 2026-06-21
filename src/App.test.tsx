@@ -49,6 +49,11 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: /superstrike web driver/i })).toBeInTheDocument();
   });
 
+  it('does not render a manual read button', () => {
+    render(<App />);
+    expect(screen.queryByRole('button', { name: /^read$/i })).not.toBeInTheDocument();
+  });
+
   it('reads a snapshot automatically after connecting', async () => {
     const user = userEvent.setup();
     const readSnapshot = vi.fn().mockResolvedValue(snapshot);

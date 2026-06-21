@@ -1,4 +1,4 @@
-import { Cable, RefreshCw, Search } from 'lucide-react';
+import { Cable, Search } from 'lucide-react';
 import type { DeviceSnapshot, DriverDeviceInfo } from '../hid/superstrikeDriver';
 
 interface ConnectionPanelProps {
@@ -8,7 +8,6 @@ interface ConnectionPanelProps {
   status: string;
   webHidSupported: boolean;
   onConnect: () => void;
-  onReadSnapshot: () => void;
 }
 
 export default function ConnectionPanel({
@@ -18,7 +17,6 @@ export default function ConnectionPanel({
   status,
   webHidSupported,
   onConnect,
-  onReadSnapshot,
 }: ConnectionPanelProps) {
   return (
     <section className="panel connection-panel" aria-labelledby="connection-heading">
@@ -31,10 +29,6 @@ export default function ConnectionPanel({
         <button className="primary-button" type="button" onClick={onConnect} disabled={busy || !webHidSupported}>
           <Cable aria-hidden="true" size={18} />
           Connect
-        </button>
-        <button type="button" onClick={onReadSnapshot} disabled={busy || !device}>
-          <RefreshCw aria-hidden="true" size={18} />
-          Read
         </button>
       </div>
 
@@ -60,7 +54,7 @@ export default function ConnectionPanel({
       {!webHidSupported ? (
         <p className="warning">
           <Search aria-hidden="true" size={16} />
-          WebHID is not available in this browser. Use Chromium or Chrome on localhost.
+          WebHID is not available in this browser. Use Chromium or Chrome over HTTPS or localhost.
         </p>
       ) : null}
     </section>
