@@ -223,6 +223,31 @@ label {
   font-size: 1rem;
 }
 
+.slider-number-field {
+  gap: 8px;
+}
+
+.field-label-row {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.field-label-row output {
+  color: #253443;
+  font-weight: 700;
+  min-width: 4ch;
+  text-align: right;
+}
+
+.slider-number-field input[type="range"] {
+  accent-color: #0f766e;
+  border: 0;
+  min-height: 24px;
+  padding: 0;
+}
+
 .error-list {
   color: #9f1239;
   margin: 0;

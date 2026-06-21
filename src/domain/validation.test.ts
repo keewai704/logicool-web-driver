@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateSuperstrikeSettings } from './validation';
+import { validateExtendedDpiSettings, validateSuperstrikeSettings } from './validation';
 import type { SuperstrikeSettings } from '../hid/features';
 
 const validSettings: SuperstrikeSettings = {
@@ -40,5 +40,26 @@ describe('validateSuperstrikeSettings', () => {
 
     expect(result.ok).toBe(false);
     expect(result.errors).toContain('Left haptics must be an integer from 0 to 5.');
+  });
+});
+
+describe('validateExtendedDpiSettings', () => {
+  it('accepts PRO X2 Superstrike DPI values in 50-DPI steps from 100 to 32000', () => {
+    expect(validateExtendedDpiSettings({ x: 100, y: 32000, lod: 'HIGH' })).toEqual({ ok: true, errors: [] });
+  });
+
+  it('rejects DPI values outside the supported range', () => {
+    const result = validateExtendedDpiSettings({ x: 50, y: 32050, lod: 'LOW' });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain('DPI X must be an integer from 100 to 32000 in steps of 50.');
+    expect(result.errors).toContain('DPI Y must be an integer from 100 to 32000 in steps of 50.');
+  });
+
+  it('rejects DPI values that are not aligned to the supported step', () => {
+    const result = validateExtendedDpiSettings({ x: 125, y: 1600, lod: 'MEDIUM' });
+
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain('DPI X must be an integer from 100 to 32000 in steps of 50.');
   });
 });

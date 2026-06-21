@@ -1,6 +1,6 @@
 import { Save, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { validateSuperstrikeSettings } from '../domain/validation';
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { NUMERIC_RANGES, validateExtendedDpiSettings, validateSuperstrikeSettings } from '../domain/validation';
 import type {
   ExtendedDpiSettings,
   ExtendedReportRate,
@@ -57,8 +57,10 @@ export default function SuperstrikeSettings({
   }, [snapshot]);
 
   const validation = useMemo(() => validateSuperstrikeSettings(tuning), [tuning]);
+  const dpiValidation = useMemo(() => validateExtendedDpiSettings(dpi), [dpi]);
   const hasSnapshot = Boolean(snapshot);
   const canWriteTuning = hasSnapshot && Boolean(snapshot?.superstrike) && validation.ok && !busy;
+  const canWriteDpi = hasSnapshot && Boolean(snapshot?.dpi) && dpiValidation.ok && !busy;
 
   return (
     <section className="panel" aria-labelledby="settings-heading">
@@ -100,28 +102,22 @@ export default function SuperstrikeSettings({
 
         <fieldset className="fieldset">
           <legend>Sensor</legend>
-          <label>
-            DPI X
-            <input
-              type="number"
-              min="100"
-              max="44000"
-              step="50"
-              value={dpi.x}
-              onChange={(event) => setDpi({ ...dpi, x: Number(event.target.value) })}
-            />
-          </label>
-          <label>
-            DPI Y
-            <input
-              type="number"
-              min="100"
-              max="44000"
-              step="50"
-              value={dpi.y}
-              onChange={(event) => setDpi({ ...dpi, y: Number(event.target.value) })}
-            />
-          </label>
+          <SliderNumberField
+            label="DPI X"
+            max={NUMERIC_RANGES.dpi.max}
+            min={NUMERIC_RANGES.dpi.min}
+            step={NUMERIC_RANGES.dpi.step}
+            value={dpi.x}
+            onChange={(x) => setDpi({ ...dpi, x })}
+          />
+          <SliderNumberField
+            label="DPI Y"
+            max={NUMERIC_RANGES.dpi.max}
+            min={NUMERIC_RANGES.dpi.min}
+            step={NUMERIC_RANGES.dpi.step}
+            value={dpi.y}
+            onChange={(y) => setDpi({ ...dpi, y })}
+          />
           <label>
             LOD
             <select value={dpi.lod} onChange={(event) => setDpi({ ...dpi, lod: event.target.value as ExtendedDpiSettings['lod'] })}>
@@ -130,7 +126,14 @@ export default function SuperstrikeSettings({
               <option value="HIGH">HIGH</option>
             </select>
           </label>
-          <button type="button" onClick={() => onWriteDpi(dpi)} disabled={busy || !snapshot?.dpi}>
+          {dpiValidation.errors.length > 0 ? (
+            <ul className="error-list">
+              {dpiValidation.errors.map((error) => (
+                <li key={error}>{error}</li>
+              ))}
+            </ul>
+          ) : null}
+          <button type="button" onClick={() => onWriteDpi(dpi)} disabled={!canWriteDpi}>
             <Save aria-hidden="true" size={18} />
             Write DPI
           </button>
@@ -187,24 +190,27 @@ function ButtonTuningEditor({
   return (
     <div className="button-tuning">
       <h3>{label}</h3>
-      <NumberField
+      <SliderNumberField
         label={`${label} actuation`}
-        max={10}
-        min={1}
+        max={NUMERIC_RANGES.actuation.max}
+        min={NUMERIC_RANGES.actuation.min}
+        step={NUMERIC_RANGES.actuation.step}
         value={value.actuation}
         onChange={(actuation) => onChange({ ...value, actuation })}
       />
-      <NumberField
+      <SliderNumberField
         label={`${label} rapid trigger`}
-        max={5}
-        min={1}
+        max={NUMERIC_RANGES.rapidTrigger.max}
+        min={NUMERIC_RANGES.rapidTrigger.min}
+        step={NUMERIC_RANGES.rapidTrigger.step}
         value={value.rapidTrigger}
         onChange={(rapidTrigger) => onChange({ ...value, rapidTrigger })}
       />
-      <NumberField
+      <SliderNumberField
         label={`${label} haptics`}
-        max={5}
-        min={0}
+        max={NUMERIC_RANGES.haptics.max}
+        min={NUMERIC_RANGES.haptics.min}
+        step={NUMERIC_RANGES.haptics.step}
         value={value.haptics}
         onChange={(haptics) => onChange({ ...value, haptics })}
       />
@@ -212,30 +218,46 @@ function ButtonTuningEditor({
   );
 }
 
-function NumberField({
+function SliderNumberField({
   label,
   max,
   min,
   onChange,
+  step,
   value,
 }: {
   label: string;
   max: number;
   min: number;
   onChange: (value: number) => void;
+  step: number;
   value: number;
 }) {
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => onChange(Number(event.target.value));
+
   return (
-    <label>
-      {label}
+    <label className="slider-number-field">
+      <span className="field-label-row">
+        <span>{label}</span>
+        <output>{value}</output>
+      </span>
       <input
         aria-label={label}
         max={max}
         min={min}
-        step="1"
+        step={step}
+        type="range"
+        value={value}
+        onChange={handleChange}
+      />
+      <input
+        aria-label={label}
+        max={max}
+        min={min}
+        step={step}
         type="number"
         value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onChange={handleChange}
       />
     </label>
   );
