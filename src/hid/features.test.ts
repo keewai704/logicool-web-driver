@@ -38,11 +38,18 @@ describe('feature codecs', () => {
   });
 
   it('encodes and decodes extended DPI settings', () => {
-    expect(encodeExtendedDpi({ x: 1600, y: 1600, lod: 'HIGH' })).toEqual([0x06, 0x40, 0x06, 0x40, 0x01]);
-    expect(decodeExtendedDpi(new Uint8Array([0x03, 0x20, 0x06, 0x40, 0x00]))).toEqual({
+    expect(encodeExtendedDpi({ x: 1600, y: 3200, lod: 'HIGH' })).toEqual([
+      0x00, 0x06, 0x40, 0x0c, 0x80, 0x02,
+    ]);
+    expect(decodeExtendedDpi(new Uint8Array([0x00, 0x06, 0x40, 0x03, 0x20, 0x0c, 0x80, 0x06, 0x40, 0x02]))).toEqual({
+      x: 1600,
+      y: 3200,
+      lod: 'HIGH',
+    });
+    expect(decodeExtendedDpi(new Uint8Array([0x00, 0x00, 0x00, 0x03, 0x20, 0x00, 0x00, 0x06, 0x40, 0x01]))).toEqual({
       x: 800,
       y: 1600,
-      lod: 'LOW',
+      lod: 'MEDIUM',
     });
   });
 

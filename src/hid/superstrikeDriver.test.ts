@@ -14,7 +14,7 @@ class StubTransport implements HidppTransport {
   }
 }
 
-function responseFor(request: HidppFeatureRequest, params: number[]): HidppResponse {
+function responseFor(request: HidppFeatureRequest, params: readonly number[]): HidppResponse {
   return {
     reportId: request.reportId,
     deviceIndex: request.deviceIndex,
@@ -103,5 +103,73 @@ describe('SuperstrikeDriver', () => {
     expect(writeRequests).toHaveLength(2);
     expect(writeRequests.at(0)).toMatchObject({ reportId: 0x11, deviceIndex: 0x01, params: [0x00, 0x14, 0x0d, 0x10] });
     expect(writeRequests.at(1)).toMatchObject({ reportId: 0x11, deviceIndex: 0x01, params: [0x01, 0x18, 0x09, 0x00] });
+  });
+
+  it('reads extended DPI from the combined X, Y, and LOD payload', async () => {
+    const transport = new StubTransport((request) => {
+      const featureId = (request.params?.[0] ?? 0) << 8 | (request.params?.[1] ?? 0);
+      if (featureId === FEATURE_IDS.FEATURE_SET) {
+        return responseFor(request, [0x01, 0x00, 0x02]);
+      }
+      if (featureId === FEATURE_IDS.EXTENDED_ADJUSTABLE_DPI) {
+        return responseFor(request, [0x09, 0x00, 0x01]);
+      }
+      if (featureId === FEATURE_IDS.EXTENDED_ADJUSTABLE_REPORT_RATE) {
+        return responseFor(request, [0x0d, 0x00, 0x01]);
+      }
+      if (request.featureIndex === 0x09 && request.functionId === 0x58) {
+        return responseFor(request, [0x00, 0x06, 0x40, 0x03, 0x20, 0x0c, 0x80, 0x06, 0x40, 0x02]);
+      }
+      if (request.featureIndex === 0x0d && request.functionId === 0x28) {
+        return responseFor(request, [0x04]);
+      }
+      return responseFor(request, [0x00, 0x00, 0x00]);
+    });
+    const driver = new SuperstrikeDriver(transport, {
+      productName: 'Fake PRO X2 SUPERSTRIKE',
+      vendorId: 0x046d,
+      productId: 0x40bd,
+    });
+
+    const snapshot = await driver.readSnapshot();
+
+    expect(snapshot.dpi).toEqual({ x: 1600, y: 3200, lod: 'HIGH' });
+    expect(snapshot.reportRate).toBe('500us');
+    const dpiReads = transport.requests.filter((request) => request.featureIndex === 0x09);
+    expect(dpiReads).toEqual([expect.objectContaining({ functionId: 0x58 })]);
+    expect(dpiReads[0].params).toBeUndefined();
+    expect(transport.requests).toContainEqual(expect.objectContaining({ featureIndex: 0x0d, functionId: 0x28 }));
+  });
+
+  it('writes extended DPI as one combined payload and report rate through their setting write functions', async () => {
+    const transport = new StubTransport((request) => {
+      const featureId = (request.params?.[0] ?? 0) << 8 | (request.params?.[1] ?? 0);
+      if (featureId === FEATURE_IDS.FEATURE_SET) {
+        return responseFor(request, [0x01, 0x00, 0x02]);
+      }
+      if (featureId === FEATURE_IDS.EXTENDED_ADJUSTABLE_DPI) {
+        return responseFor(request, [0x09, 0x00, 0x01]);
+      }
+      if (featureId === FEATURE_IDS.EXTENDED_ADJUSTABLE_REPORT_RATE) {
+        return responseFor(request, [0x0d, 0x00, 0x01]);
+      }
+      return responseFor(request, request.params ?? []);
+    });
+    const driver = new SuperstrikeDriver(transport, {
+      productName: 'Fake PRO X2 SUPERSTRIKE',
+      vendorId: 0x046d,
+      productId: 0x40bd,
+    });
+
+    await driver.writeExtendedDpi({ x: 800, y: 1600, lod: 'HIGH' });
+    await driver.writeExtendedReportRate('125us');
+
+    const dpiWrites = transport.requests.filter((request) => request.featureIndex === 0x09);
+    expect(dpiWrites).toEqual([
+      expect.objectContaining({ functionId: 0x68, params: [0x00, 0x03, 0x20, 0x06, 0x40, 0x02] }),
+    ]);
+    expect(transport.requests).toContainEqual(
+      expect.objectContaining({ featureIndex: 0x0d, functionId: 0x38, params: [0x06] }),
+    );
   });
 });

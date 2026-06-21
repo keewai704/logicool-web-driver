@@ -126,6 +126,7 @@ export default function SuperstrikeSettings({
             LOD
             <select value={dpi.lod} onChange={(event) => setDpi({ ...dpi, lod: event.target.value as ExtendedDpiSettings['lod'] })}>
               <option value="LOW">LOW</option>
+              <option value="MEDIUM">MEDIUM</option>
               <option value="HIGH">HIGH</option>
             </select>
           </label>

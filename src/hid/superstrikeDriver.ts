@@ -61,6 +61,10 @@ const SOFTWARE_ID = 0x08;
 const FN_ROOT_GET_FEATURE = 0x00 | SOFTWARE_ID;
 const FN_GET = 0x20 | SOFTWARE_ID;
 const FN_SET = 0x10 | SOFTWARE_ID;
+const FN_EXTENDED_DPI_GET = 0x50 | SOFTWARE_ID;
+const FN_EXTENDED_DPI_SET = 0x60 | SOFTWARE_ID;
+const FN_EXTENDED_REPORT_RATE_GET = 0x20 | SOFTWARE_ID;
+const FN_EXTENDED_REPORT_RATE_SET = 0x30 | SOFTWARE_ID;
 const TARGET_FEATURE_IDS = [
   FEATURE_IDS.SUPERSTRIKE_TUNING,
   FEATURE_IDS.EXTENDED_ADJUSTABLE_DPI,
@@ -159,11 +163,12 @@ export class SuperstrikeDriver {
   async writeExtendedDpi(settings: ExtendedDpiSettings): Promise<void> {
     const feature = await this.requireFeature('EXTENDED_ADJUSTABLE_DPI');
     const deviceIndex = await this.resolveDeviceIndex();
+
     await this.transport.request({
       reportId: HIDPP_LONG_REPORT_ID,
       deviceIndex,
       featureIndex: feature.index,
-      functionId: FN_SET,
+      functionId: FN_EXTENDED_DPI_SET,
       params: encodeExtendedDpi(settings),
     });
   }
@@ -175,7 +180,7 @@ export class SuperstrikeDriver {
       reportId: HIDPP_LONG_REPORT_ID,
       deviceIndex,
       featureIndex: feature.index,
-      functionId: FN_SET,
+      functionId: FN_EXTENDED_REPORT_RATE_SET,
       params: encodeExtendedReportRate(rate),
     });
   }
@@ -276,7 +281,7 @@ export class SuperstrikeDriver {
       reportId: HIDPP_LONG_REPORT_ID,
       deviceIndex,
       featureIndex: feature.index,
-      functionId: 0x10 | SOFTWARE_ID,
+      functionId: FN_EXTENDED_DPI_GET,
     });
 
     return decodeExtendedDpi(response.params);
@@ -293,7 +298,7 @@ export class SuperstrikeDriver {
       reportId: HIDPP_LONG_REPORT_ID,
       deviceIndex,
       featureIndex: feature.index,
-      functionId: 0x10 | SOFTWARE_ID,
+      functionId: FN_EXTENDED_REPORT_RATE_GET,
     });
 
     return decodeExtendedReportRate(response.params);

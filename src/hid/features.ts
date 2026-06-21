@@ -24,7 +24,7 @@ export interface SuperstrikeSettings {
   right: SuperstrikeButtonSettings;
 }
 
-export type LodSetting = 'LOW' | 'HIGH';
+export type LodSetting = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface ExtendedDpiSettings {
   x: number;
@@ -52,12 +52,14 @@ const BUTTON_BY_INDEX: Record<number, SuperstrikeButton> = {
 
 const LOD_VALUE: Record<LodSetting, number> = {
   LOW: 0x00,
-  HIGH: 0x01,
+  MEDIUM: 0x01,
+  HIGH: 0x02,
 };
 
 const LOD_BY_VALUE: Record<number, LodSetting> = {
   0x00: 'LOW',
-  0x01: 'HIGH',
+  0x01: 'MEDIUM',
+  0x02: 'HIGH',
 };
 
 export const EXTENDED_REPORT_RATE_VALUE: Record<ExtendedReportRate, number> = {
@@ -122,6 +124,7 @@ export function decodeSuperstrikeRead(params: Uint8Array): DecodedSuperstrikeRea
 
 export function encodeExtendedDpi(settings: ExtendedDpiSettings): number[] {
   return [
+    0x00,
     (settings.x >> 8) & 0xff,
     settings.x & 0xff,
     (settings.y >> 8) & 0xff,
@@ -131,15 +134,23 @@ export function encodeExtendedDpi(settings: ExtendedDpiSettings): number[] {
 }
 
 export function decodeExtendedDpi(params: Uint8Array): ExtendedDpiSettings {
-  const lod = LOD_BY_VALUE[params[4]];
+  if (params.length < 10) {
+    throw new Error(`Extended DPI response is too short: ${params.length} bytes`);
+  }
+
+  const currentX = readUint16(params, 1);
+  const defaultX = readUint16(params, 3);
+  const currentY = readUint16(params, 5);
+  const defaultY = readUint16(params, 7);
+  const lod = LOD_BY_VALUE[params[9]];
 
   if (!lod) {
-    throw new Error(`Unknown LOD value ${params[4]}`);
+    throw new Error(`Unknown LOD value ${params[9]}`);
   }
 
   return {
-    x: (params[0] << 8) | params[1],
-    y: (params[2] << 8) | params[3],
+    x: currentX === 0 ? defaultX : currentX,
+    y: currentY === 0 ? defaultY : currentY,
     lod,
   };
 }
@@ -170,4 +181,8 @@ export function decodeOnboardMode(params: Uint8Array): OnboardMode {
   }
 
   return mode;
+}
+
+function readUint16(params: Uint8Array, offset: number): number {
+  return (params[offset] << 8) | params[offset + 1];
 }
