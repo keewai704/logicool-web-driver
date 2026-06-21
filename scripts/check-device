@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "Superstrike WebHID device check"
+echo
+
+if command -v lsusb >/dev/null 2>&1; then
+  echo "Logitech USB devices:"
+  if ! lsusb -d 046d:; then
+    echo "  No Logitech USB devices detected by lsusb."
+  fi
+else
+  echo "lsusb is not installed. Enter the Nix shell with: nix develop"
+fi
+
+echo
+echo "hidraw permissions:"
+found=0
+for node in /dev/hidraw*; do
+  [ -e "$node" ] || continue
+  found=1
+  stat -c "  %n %U:%G %A" "$node"
+done
+
+if [ "$found" -eq 0 ]; then
+  echo "  No hidraw nodes found."
+fi
+
+echo
+echo "Browser requirements:"
+echo "  Use a Chromium-based browser with WebHID support."
+echo "  Serve the app from localhost with: pnpm dev"
+echo "  If the browser cannot open the device, check udev/hidraw permissions."

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+.pnpm-home/
+.direnv/
+.vite/
+*.log
+result
+result-*
