@@ -1,14 +1,18 @@
 import { AlertTriangle, Cpu, Settings, Stethoscope } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import BackupPanel from './components/BackupPanel';
 import ConnectionPanel from './components/ConnectionPanel';
 import DiagnosticsPanel, { type RawRequestInput } from './components/DiagnosticsPanel';
 import SuperstrikeSettings from './components/SuperstrikeSettings';
+import { validateSuperstrikeSettings } from './domain/validation';
 import type { ExtendedDpiSettings, ExtendedReportRate, OnboardMode, SuperstrikeSettings as SuperstrikeSettingsValue } from './hid/features';
 import { SuperstrikeDriver, type DeviceSnapshot, type DriverDeviceInfo } from './hid/superstrikeDriver';
 import { requestLogitechDevice, WebHidTransport, type ProtocolLogEntry } from './hid/webhidTransport';
 
 type Tab = 'settings' | 'backup' | 'diagnostics';
+
+const DESIRED_SUPERSTRIKE_STORAGE_KEY = 'superstrike-webhid:desired-superstrike';
+const SUPERSTRIKE_REAPPLY_INTERVAL_MS = 30_000;
 
 export default function App() {
   const [busy, setBusy] = useState(false);
@@ -18,18 +22,26 @@ export default function App() {
   const [status, setStatus] = useState('Connect a Logitech PRO X2 SUPERSTRIKE over USB or LIGHTSPEED receiver.');
   const [tab, setTab] = useState<Tab>('settings');
   const [logs, setLogs] = useState<ProtocolLogEntry[]>([]);
+  const [desiredSuperstrike, setDesiredSuperstrike] = useState<SuperstrikeSettingsValue | null>(() => loadDesiredSuperstrikeSettings());
+  const busyRef = useRef(false);
 
   const webHidSupported = typeof navigator !== 'undefined' && Boolean(navigator.hid);
   const unsupportedFeatures = useMemo(() => snapshot?.unsupportedFeatures ?? [], [snapshot]);
 
-  async function runOperation(operation: () => Promise<void>, successMessage: string): Promise<void> {
+  useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  async function runOperation(operation: () => Promise<void | string>, successMessage: string): Promise<void> {
+    busyRef.current = true;
     setBusy(true);
     try {
-      await operation();
-      setStatus(successMessage);
+      const message = await operation();
+      setStatus(message ?? successMessage);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : String(error));
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -51,11 +63,15 @@ export default function App() {
         productId: hidDevice.productId,
       };
       const nextDriver = new SuperstrikeDriver(transport, info);
-      const nextSnapshot = await nextDriver.readSnapshot();
+      const initialSnapshot = await nextDriver.readSnapshot();
+      const { snapshot: nextSnapshot, reapplied } = await reapplyDesiredSuperstrikeIfNeeded(nextDriver, initialSnapshot, desiredSuperstrike);
       setDriver(nextDriver);
       setDevice(info);
       setSnapshot(nextSnapshot);
       setLogs(nextSnapshot.logs);
+      if (reapplied) {
+        return 'Device connected, saved tuning reapplied, and snapshot read.';
+      }
     }, 'Device connected and snapshot read.');
   }
 
@@ -75,6 +91,8 @@ export default function App() {
         throw new Error('Connect the device before writing.');
       }
       await driver.writeSuperstrikeSettings(settings);
+      storeDesiredSuperstrikeSettings(settings);
+      setDesiredSuperstrike(settings);
       await refreshAfterWrite('Superstrike tuning written and snapshot refreshed.');
     }, 'Superstrike tuning written and snapshot refreshed.');
   }
@@ -120,6 +138,55 @@ export default function App() {
       setLogs(nextSnapshot.logs);
     }, 'Raw request sent. Inspect the protocol log.');
   }
+
+  useEffect(() => {
+    if (!driver || !desiredSuperstrike) {
+      return undefined;
+    }
+
+    const currentDriver = driver;
+    let cancelled = false;
+
+    async function checkAndReapply(): Promise<void> {
+      if (busyRef.current) {
+        return;
+      }
+
+      busyRef.current = true;
+      setBusy(true);
+      try {
+        const currentSnapshot = await currentDriver.readSnapshot();
+        const result = await reapplyDesiredSuperstrikeIfNeeded(currentDriver, currentSnapshot, desiredSuperstrike);
+        if (cancelled) {
+          return;
+        }
+
+        setSnapshot(result.snapshot);
+        setLogs(result.snapshot.logs);
+        if (result.reapplied) {
+          setStatus('Saved Superstrike tuning reapplied.');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setStatus(error instanceof Error ? error.message : String(error));
+        }
+      } finally {
+        busyRef.current = false;
+        if (!cancelled) {
+          setBusy(false);
+        }
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void checkAndReapply();
+    }, SUPERSTRIKE_REAPPLY_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [desiredSuperstrike, driver]);
 
   return (
     <main className="app-shell">
@@ -181,5 +248,58 @@ export default function App() {
         <DiagnosticsPanel busy={busy} logs={logs} snapshot={snapshot} onRawRequest={(request) => void handleRawRequest(request)} />
       ) : null}
     </main>
+  );
+}
+
+async function reapplyDesiredSuperstrikeIfNeeded(
+  driver: SuperstrikeDriver,
+  snapshot: DeviceSnapshot,
+  desired: SuperstrikeSettingsValue | null,
+): Promise<{ snapshot: DeviceSnapshot; reapplied: boolean }> {
+  if (!desired || !snapshot.superstrike || superstrikeSettingsEqual(snapshot.superstrike, desired)) {
+    return { snapshot, reapplied: false };
+  }
+
+  await driver.writeSuperstrikeSettings(desired);
+  return {
+    snapshot: await driver.readSnapshot(),
+    reapplied: true,
+  };
+}
+
+function loadDesiredSuperstrikeSettings(): SuperstrikeSettingsValue | null {
+  if (typeof localStorage === 'undefined') {
+    return null;
+  }
+
+  try {
+    const raw = localStorage.getItem(DESIRED_SUPERSTRIKE_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as SuperstrikeSettingsValue;
+    return validateSuperstrikeSettings(parsed).ok ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function storeDesiredSuperstrikeSettings(settings: SuperstrikeSettingsValue): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  localStorage.setItem(DESIRED_SUPERSTRIKE_STORAGE_KEY, JSON.stringify(settings));
+}
+
+function superstrikeSettingsEqual(left: SuperstrikeSettingsValue, right: SuperstrikeSettingsValue): boolean {
+  return (
+    left.left.actuation === right.left.actuation &&
+    left.left.rapidTrigger === right.left.rapidTrigger &&
+    left.left.haptics === right.left.haptics &&
+    left.right.actuation === right.right.actuation &&
+    left.right.rapidTrigger === right.right.rapidTrigger &&
+    left.right.haptics === right.right.haptics
   );
 }
